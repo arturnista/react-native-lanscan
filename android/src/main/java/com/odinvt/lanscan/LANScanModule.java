@@ -108,6 +108,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                 // successfully stopped the tasks... send top event
                 sendEvent(getReactApplicationContext(), EVENT_STOP, null);
             }
+            /* AQUIIIIIIIIIIIIIIIIIIII */
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
@@ -425,6 +426,10 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             int s_leaseDuration = dhcp_info.leaseDuration;
             String s_netmask = intToIp(dhcp_info.netmask);
             String s_serverAddress = intToIp(dhcp_info.serverAddress);
+
+            if(s_netmask.equals("0.0.0.0")) {
+                s_netmask = "255.255.255.0";
+            }
 
             WritableMap device_info = new WritableNativeMap();
             device_info.putString(KEY_WIFISTATE_DNS1, s_dns1);
