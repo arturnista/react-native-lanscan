@@ -339,7 +339,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                             sendEvent(getReactApplicationContext(), EVENT_HOSTFOUND, available_host);
                             //Log.wtf("NETWORK : ", "LOOPING BACK FOR THE NEXT DATAGRAM RECEIVE...");
                         } catch (IOException e) {
-                            Log.e("IOE", e.getMessage());
+                            Log.e("IOE", e.toString());
                             /* cancel current task if can't listen for packets */
                             this.cancel(true);
                         }
