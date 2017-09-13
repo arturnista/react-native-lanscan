@@ -143,7 +143,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             Log.d("ReactNative", "broadcastThread is shutdown? " + broadcastThread.isShutdown());
 
             for(int i = min_port; i <= max_port; i++) {
-                sendDatagram(broadcastAddr, true, i,broadcast_timeout, a);
+                sendDatagram(broadcastAddr, true, i,broadcast_timeout, broadcastThread);
             }
 
             broadcastThread.shutdown();
