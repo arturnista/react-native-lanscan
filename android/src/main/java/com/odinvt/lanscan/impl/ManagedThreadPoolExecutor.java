@@ -27,9 +27,17 @@ public class ManagedThreadPoolExecutor {
     };
 
     public static Executor THREAD_POOL_EXECUTOR_BROADCAST;
-    public static final Executor THREAD_POOL_EXECUTOR_PINGS = new ThreadPoolExecutor(CORE_POOL_SIZE, MAXIMUM_POOL_SIZE, KEEP_ALIVE, TimeUnit.SECONDS, sPoolWorkQueue, sThreadFactory);
+    public static Executor THREAD_POOL_EXECUTOR_PINGS;
+
+    public static Executor getExecutorPings () {
+        return new ThreadPoolExecutor(CORE_POOL_SIZE, MAXIMUM_POOL_SIZE, KEEP_ALIVE, TimeUnit.SECONDS, sPoolWorkQueue, sThreadFactory);
+    }
 
     public static Executor getExecutorBroadcast () {
+        return new ThreadPoolExecutor(CORE_POOL_SIZE, MAXIMUM_POOL_SIZE, KEEP_ALIVE, TimeUnit.SECONDS, sPoolWorkQueue, sThreadFactory);
+    }
+
+    public static Executor getExecutor () {
         return new ThreadPoolExecutor(CORE_POOL_SIZE, MAXIMUM_POOL_SIZE, KEEP_ALIVE, TimeUnit.SECONDS, sPoolWorkQueue, sThreadFactory);
     }
 }

@@ -66,6 +66,9 @@ public class LANScanModule extends ReactContextBaseJavaModule {
     private ArrayList<String> hosts_list;
     private HashMap<String, ArrayList<Integer>> available_hosts;
 
+    final ThreadPoolExecutor broadcastThread;
+    final ThreadPoolExecutor pingsThread;
+
     public LANScanModule(ReactApplicationContext reactContext) {
         super(reactContext);
     }
@@ -88,8 +91,8 @@ public class LANScanModule extends ReactContextBaseJavaModule {
         new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
             @Override
             protected void doInBackgroundGuarded(Void... params) {
-                ((ThreadPoolExecutor)ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).shutdownNow();
-                ((ThreadPoolExecutor)ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST).shutdownNow();
+                pingsThread.shutdownNow();
+                broadcastThread.shutdownNow();
 
                 long startTime = System.currentTimeMillis();
                 long endTime = 0L;
@@ -100,15 +103,14 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                 // wait until all the threads are terminated
                 // or grace timeout finishes
                 while(!isTerminated_broadcast || !isTerminated_pings || endTime < timeout) {
-                    isTerminated_broadcast = ((ThreadPoolExecutor)ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST).isTerminated();
-                    isTerminated_pings = ((ThreadPoolExecutor)ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST).isTerminated();
+                    isTerminated_broadcast = broadcastThread.isTerminated();
+                    isTerminated_pings = broadcastThread.isTerminated();
                     endTime = (new Date()).getTime() - startTime;
                 }
 
                 // successfully stopped the tasks... send top event
                 sendEvent(getReactApplicationContext(), EVENT_STOP, null);
             }
-            /* AQUIIIIIIIIIIIIIIIIIIII */
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
@@ -136,14 +138,15 @@ public class LANScanModule extends ReactContextBaseJavaModule {
 
 
             // ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST)
-            final ThreadPoolExecutor a = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutorBroadcast());
-            Log.d("ReactNative", ""+a.isShutdown());
+            broadcastThread = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutor());
+            pingsThread = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutor());
+            Log.d("ReactNative", "broadcastThread is shutdown? " + broadcastThread.isShutdown());
 
             for(int i = min_port; i <= max_port; i++) {
                 sendDatagram(broadcastAddr, true, i,broadcast_timeout, a);
             }
 
-            a.shutdown();
+            broadcastThread.shutdown();
 
             final long timeout = broadcast_timeout + 500;
 
@@ -154,14 +157,14 @@ public class LANScanModule extends ReactContextBaseJavaModule {
 
                     // TODO: better to use ThreadPoolExecutor.awaitTerminated (for some reason doesn't interrupt)
                     long completed_tasks;
-                    long task_count = a.getTaskCount();
+                    long task_count = broadcastThread.getTaskCount();
 
                     long startTime = System.currentTimeMillis();
                     long endTime = 0L;
                     // infinite loop that stops on 1 of the 2 conditions:
                     // tasks are completed or timeout ran out
                     while (true) {
-                        completed_tasks = a.getCompletedTaskCount();
+                        completed_tasks = broadcastThread.getCompletedTaskCount();
                         //Log.wtf("WAITING FOR TASKS BROADCAST : ", "WAITING FOR TASKS TO COMPLETE " + completed_tasks + "/" + task_count);
                         if (completed_tasks < task_count || endTime < timeout) {
                             endTime = (new Date()).getTime() - startTime;
@@ -200,7 +203,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                                             sendEvent(getReactApplicationContext(), EVENT_HOSTFOUNDPING, host);
 
                                             for (int i = min_port; i <= max_port; i++) {
-                                                sendDatagram(host, false, i, port_ms, ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS);
+                                                sendDatagram(host, false, i, port_ms, pingsThread);
                                             }
                                         } else {
                                             //Log.wtf("HOST NOT RESPONSIVE", host + " is not responding");
@@ -217,12 +220,12 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                         }
 
                         // start waiting for ping UDP tasks to finish to send the end event
-                        ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).shutdown();
+                        pingsThread.shutdown();
                         long timeout_pings = port_ms + 500;
 
                         // TODO: better to use ThreadPoolExecutor.awaitTerminated (for some reason doesn't interrupt)
                         long completed_tasks_pings;
-                        long task_count_pings = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).getTaskCount();
+                        long task_count_pings = pingsThread.getTaskCount();
 
                         long startTime_pings = System.currentTimeMillis();
                         long endTime_pings = 0L;
@@ -230,7 +233,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                         // infinite loop that stops on 1 of the 2 conditions:
                         // ping udp tasks are completed or timeout ran out
                         while(true) {
-                            completed_tasks_pings = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).getCompletedTaskCount();
+                            completed_tasks_pings = pingsThread.getCompletedTaskCount();
                             if (completed_tasks_pings < task_count_pings || endTime_pings < timeout_pings) {
                                 endTime_pings = (new Date()).getTime() - startTime_pings;
                                 continue;
@@ -258,13 +261,11 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                              final long timeout_ms,
                              Executor thread_pool) {
         try {
-            Log.d("ReactNative", "1");
             final DatagramSocket serverSocket = new DatagramSocket();
             serverSocket.setBroadcast(broadcast);
             serverSocket.setReuseAddress(true);
             InetAddress IPAddress = InetAddress.getByName(broadcastAddr);
             //Log.wtf("Info", "Sending Discovery message to " + IPAddress.getHostAddress() + " Via UDP port " + port);
-            Log.d("ReactNative", "2");
 
             // we're sending "RNLS" message so if you need to check on the other devices on local network
             // you need to open an udp listener on port 'port' and wait for the message "RNLS" which is a byte[4]
@@ -274,12 +275,10 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             sendData[2] = 'L';
             sendData[3] = 'S';
 
-            Log.d("ReactNative", "3");
             final DatagramPacket sendPacket = new DatagramPacket(sendData,sendData.length,IPAddress,port);
 
             //Log.wtf("STARTING TASK : ", "STARTING RECEIVER TASK FOR " + broadcastAddr);
             // Execute a receiver task in the background to start waiting for LAN replies before sending packets
-            Log.d("ReactNative", "4");
             final AsyncTask guarded_receive_task = new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
                 @Override
                 protected void doInBackgroundGuarded(Void... params) {
@@ -365,7 +364,6 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             //Log.wtf("STARTING TASK : ", "STARTING SENDER TASK FOR " + broadcastAddr);
             // start sending packets on a background task until it is cancelled then trigger end broadcast event
             // if it is a broadcast address
-            Log.d("ReactNative", "5");
             final AsyncTask guarded_send_task = new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
                 @Override
                 protected void doInBackgroundGuarded(Void... params) {
@@ -394,7 +392,6 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             }.executeOnExecutor(thread_pool);
 
             // run a sleep task on the background to wait for the timeout
-            Log.d("ReactNative", "6");
             new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
                 @Override
                 protected void doInBackgroundGuarded(Void... params) {
