@@ -66,8 +66,8 @@ public class LANScanModule extends ReactContextBaseJavaModule {
     private ArrayList<String> hosts_list;
     private HashMap<String, ArrayList<Integer>> available_hosts;
 
-    final ThreadPoolExecutor broadcastThread;
-    final ThreadPoolExecutor pingsThread;
+    private ThreadPoolExecutor broadcastThread;
+    private ThreadPoolExecutor pingsThread;
 
     public LANScanModule(ReactApplicationContext reactContext) {
         super(reactContext);
