@@ -134,116 +134,120 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             // trigger the start broadcast event if it is a broadcast address
             sendEvent(getReactApplicationContext(), EVENT_STARTBROADCAST, null);
 
+
+            // ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST)
+            final ThreadPoolExecutor a = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutorBroadcast());
+            Log.d("ReactNative", ""+a.isShutdown());
+
             for(int i = min_port; i <= max_port; i++) {
-                sendDatagram(broadcastAddr, true, i,broadcast_timeout, ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST);
+                sendDatagram(broadcastAddr, true, i,broadcast_timeout, a);
             }
 
-            ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST).shutdown();
+            a.shutdown();
+
             final long timeout = broadcast_timeout + 500;
 
+            // awaitTermination of the sendDatagram tasks after locking them with shutdown inside an AsyncTask (no ui framedrops)
+            new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
+                @Override
+                protected void doInBackgroundGuarded(Void... params) {
 
-                //awaitTermination of the sendDatagram tasks after locking them with shutdown inside an AsyncTask (no ui framedrops)
-                new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
-                    @Override
-                    protected void doInBackgroundGuarded(Void... params) {
+                    // TODO: better to use ThreadPoolExecutor.awaitTerminated (for some reason doesn't interrupt)
+                    long completed_tasks;
+                    long task_count = a.getTaskCount();
+
+                    long startTime = System.currentTimeMillis();
+                    long endTime = 0L;
+                    // infinite loop that stops on 1 of the 2 conditions:
+                    // tasks are completed or timeout ran out
+                    while (true) {
+                        completed_tasks = a.getCompletedTaskCount();
+                        //Log.wtf("WAITING FOR TASKS BROADCAST : ", "WAITING FOR TASKS TO COMPLETE " + completed_tasks + "/" + task_count);
+                        if (completed_tasks < task_count || endTime < timeout) {
+                            endTime = (new Date()).getTime() - startTime;
+                            continue;
+                        }
+
+                        // at this point all the tasks should be closed. send end broadcast event
+                        sendEvent(getReactApplicationContext(), EVENT_ENDBROADCAST, null);
+
+
+                        if(fallback) {
+
+                            //Log.wtf("FOUND DEVICES : ", "THE BROADCAST FOUND : " + available_hosts.size() + " hosts");
+
+                            // if no device are found and user wants to fallback to host to host port scan
+                            if (available_hosts.size() == 0) {
+
+                                sendEvent(getReactApplicationContext(), EVENT_STARTPINGS, null);
+
+                                ArrayList<String> connected = new ArrayList<>();
+                                //Log.wtf("NETWORK", "PINGING " + hosts_list.size() + " Hosts....");
+                                String device_ip = "";
+                                try {
+                                    device_ip = intToIp(dhcp_info.ipAddress);
+                                } catch (UnknownHostException e) {
+                                    e.printStackTrace();
+                                }
+                                for (String host : hosts_list) {
+                                    try {
+                                        if (host.equals(device_ip))
+                                            continue;
+                                        if (InetAddress.getByName(host).isReachable(ping_ms)) {
+                                            connected.add(host);
+
+                                            //Log.wtf("HOST FOUND !!!", host + " RESPONDED");
+                                            sendEvent(getReactApplicationContext(), EVENT_HOSTFOUNDPING, host);
+
+                                            for (int i = min_port; i <= max_port; i++) {
+                                                sendDatagram(host, false, i, port_ms, ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS);
+                                            }
+                                        } else {
+                                            //Log.wtf("HOST NOT RESPONSIVE", host + " is not responding");
+                                        }
+                                    } catch (IOException ioe) {
+                                /* do nothing just continue to the next host */
+                                        ioe.printStackTrace();
+                                    }
+                                }
+                                sendEvent(getReactApplicationContext(), EVENT_ENDPINGS, connected.size());
+
+                            }
+
+                        }
+
+                        // start waiting for ping UDP tasks to finish to send the end event
+                        ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).shutdown();
+                        long timeout_pings = port_ms + 500;
 
                         // TODO: better to use ThreadPoolExecutor.awaitTerminated (for some reason doesn't interrupt)
-                        long completed_tasks;
-                        long task_count = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST).getTaskCount();
+                        long completed_tasks_pings;
+                        long task_count_pings = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).getTaskCount();
 
-                        long startTime = System.currentTimeMillis();
-                        long endTime = 0L;
+                        long startTime_pings = System.currentTimeMillis();
+                        long endTime_pings = 0L;
+                        // wait for ping tasks
                         // infinite loop that stops on 1 of the 2 conditions:
-                        // tasks are completed or timeout ran out
-                        while (true) {
-                            completed_tasks = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST).getCompletedTaskCount();
-                            //Log.wtf("WAITING FOR TASKS BROADCAST : ", "WAITING FOR TASKS TO COMPLETE " + completed_tasks + "/" + task_count);
-                            if (completed_tasks < task_count || endTime < timeout) {
-                                endTime = (new Date()).getTime() - startTime;
+                        // ping udp tasks are completed or timeout ran out
+                        while(true) {
+                            completed_tasks_pings = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).getCompletedTaskCount();
+                            if (completed_tasks_pings < task_count_pings || endTime_pings < timeout_pings) {
+                                endTime_pings = (new Date()).getTime() - startTime_pings;
                                 continue;
                             }
 
-                            // at this point all the tasks should be closed. send end broadcast event
-                            sendEvent(getReactApplicationContext(), EVENT_ENDBROADCAST, null);
-
-
-                            if(fallback) {
-
-                                //Log.wtf("FOUND DEVICES : ", "THE BROADCAST FOUND : " + available_hosts.size() + " hosts");
-
-                                // if no device are found and user wants to fallback to host to host port scan
-                                if (available_hosts.size() == 0) {
-
-                                    sendEvent(getReactApplicationContext(), EVENT_STARTPINGS, null);
-
-                                    ArrayList<String> connected = new ArrayList<>();
-                                    //Log.wtf("NETWORK", "PINGING " + hosts_list.size() + " Hosts....");
-                                    String device_ip = "";
-                                    try {
-                                        device_ip = intToIp(dhcp_info.ipAddress);
-                                    } catch (UnknownHostException e) {
-                                        e.printStackTrace();
-                                    }
-                                    for (String host : hosts_list) {
-                                        try {
-                                            if (host.equals(device_ip))
-                                                continue;
-                                            if (InetAddress.getByName(host).isReachable(ping_ms)) {
-                                                connected.add(host);
-
-                                                //Log.wtf("HOST FOUND !!!", host + " RESPONDED");
-                                                sendEvent(getReactApplicationContext(), EVENT_HOSTFOUNDPING, host);
-
-                                                for (int i = min_port; i <= max_port; i++) {
-                                                    sendDatagram(host, false, i, port_ms, ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS);
-                                                }
-                                            } else {
-                                                //Log.wtf("HOST NOT RESPONSIVE", host + " is not responding");
-                                            }
-                                        } catch (IOException ioe) {
-                                    /* do nothing just continue to the next host */
-                                            ioe.printStackTrace();
-                                        }
-                                    }
-                                    sendEvent(getReactApplicationContext(), EVENT_ENDPINGS, connected.size());
-
-                                }
-
-                            }
-
-                            // start waiting for ping UDP tasks to finish to send the end event
-                            ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).shutdown();
-                            long timeout_pings = port_ms + 500;
-
-                            // TODO: better to use ThreadPoolExecutor.awaitTerminated (for some reason doesn't interrupt)
-                            long completed_tasks_pings;
-                            long task_count_pings = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).getTaskCount();
-
-                            long startTime_pings = System.currentTimeMillis();
-                            long endTime_pings = 0L;
-                            // wait for ping tasks
-                            // infinite loop that stops on 1 of the 2 conditions:
-                            // ping udp tasks are completed or timeout ran out
-                            while(true) {
-                                completed_tasks_pings = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_PINGS).getCompletedTaskCount();
-                                if (completed_tasks_pings < task_count_pings || endTime_pings < timeout_pings) {
-                                    endTime_pings = (new Date()).getTime() - startTime_pings;
-                                    continue;
-                                }
-
-                                // at this point all the tasks (pings or broadcast) should be closed. send end event
-                                sendEvent(getReactApplicationContext(), EVENT_END, null);
-
-                                break;
-                            }
-
-
+                            // at this point all the tasks (pings or broadcast) should be closed. send end event
+                            sendEvent(getReactApplicationContext(), EVENT_END, null);
 
                             break;
                         }
-                    }
-                }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
 
+
+
+                        break;
+                    }
+                }
+            }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
 
         }
     }
@@ -253,14 +257,14 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                              final int port,
                              final long timeout_ms,
                              Executor thread_pool) {
-
-
         try {
+            Log.d("ReactNative", "1");
             final DatagramSocket serverSocket = new DatagramSocket();
             serverSocket.setBroadcast(broadcast);
             serverSocket.setReuseAddress(true);
             InetAddress IPAddress = InetAddress.getByName(broadcastAddr);
             //Log.wtf("Info", "Sending Discovery message to " + IPAddress.getHostAddress() + " Via UDP port " + port);
+            Log.d("ReactNative", "2");
 
             // we're sending "RNLS" message so if you need to check on the other devices on local network
             // you need to open an udp listener on port 'port' and wait for the message "RNLS" which is a byte[4]
@@ -270,10 +274,12 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             sendData[2] = 'L';
             sendData[3] = 'S';
 
+            Log.d("ReactNative", "3");
             final DatagramPacket sendPacket = new DatagramPacket(sendData,sendData.length,IPAddress,port);
 
             //Log.wtf("STARTING TASK : ", "STARTING RECEIVER TASK FOR " + broadcastAddr);
             // Execute a receiver task in the background to start waiting for LAN replies before sending packets
+            Log.d("ReactNative", "4");
             final AsyncTask guarded_receive_task = new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
                 @Override
                 protected void doInBackgroundGuarded(Void... params) {
@@ -359,11 +365,10 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             //Log.wtf("STARTING TASK : ", "STARTING SENDER TASK FOR " + broadcastAddr);
             // start sending packets on a background task until it is cancelled then trigger end broadcast event
             // if it is a broadcast address
+            Log.d("ReactNative", "5");
             final AsyncTask guarded_send_task = new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
                 @Override
                 protected void doInBackgroundGuarded(Void... params) {
-
-
                     while(!isCancelled()) {
                         try {
                             ////Log.wtf("SENDING PACKET : " , sendPacket.getData().toString() + " TO " + broadcastAddr + ":" + port);
@@ -389,6 +394,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             }.executeOnExecutor(thread_pool);
 
             // run a sleep task on the background to wait for the timeout
+            Log.d("ReactNative", "6");
             new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
                 @Override
                 protected void doInBackgroundGuarded(Void... params) {
@@ -403,6 +409,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
 
 
         } catch (SocketException | UnknownHostException e) {
+
             e.printStackTrace();
         }
         finally {
@@ -428,6 +435,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             String s_serverAddress = intToIp(dhcp_info.serverAddress);
 
             if(s_netmask.equals("0.0.0.0")) {
+                Log.d("ReactNative", s_netmask);
                 s_netmask = "255.255.255.0";
             }
 
