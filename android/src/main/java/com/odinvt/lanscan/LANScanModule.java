@@ -196,11 +196,17 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                                 } catch (UnknownHostException e) {
                                     e.printStackTrace();
                                 }
+                                Log.d("ReactNative", hosts_list.toString());
                                 for (String host : hosts_list) {
                                     try {
+                                        if(host.equals("10.40.8.224")) {
+                                            Log.d("ReactNative", "InetAddress: " + InetAddress.getByName(host));
+                                            Log.d("ReactNative", "InetAddress is reachable? " + InetAddress.getByName(host).isReachable(ping_ms));
+                                        }
                                         if (host.equals(device_ip))
                                             continue;
                                         if (InetAddress.getByName(host).isReachable(ping_ms)) {
+                                            Log.d("ReactNative", "is available " + host);
                                             connected.add(host);
 
                                             //Log.wtf("HOST FOUND !!!", host + " RESPONDED");
@@ -210,11 +216,13 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                                                 sendDatagram(host, false, i, port_ms, pingsThread);
                                             }
                                         } else {
+                                            // Log.d("ReactNative", "is available " + host);
                                             //Log.wtf("HOST NOT RESPONSIVE", host + " is not responding");
                                         }
                                     } catch (IOException ioe) {
                                 /* do nothing just continue to the next host */
                                         ioe.printStackTrace();
+                                        Log.d("ReactNative", "Erro?" + ioe);
                                     }
                                 }
                                 sendEvent(getReactApplicationContext(), EVENT_ENDPINGS, connected.size());
@@ -269,6 +277,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             serverSocket.setBroadcast(broadcast);
             serverSocket.setReuseAddress(true);
             InetAddress IPAddress = InetAddress.getByName(broadcastAddr);
+            Log.d("ReactNative", "Vamos: " + broadcastAddr);
             //Log.wtf("Info", "Sending Discovery message to " + IPAddress.getHostAddress() + " Via UDP port " + port);
 
             // we're sending "RNLS" message so if you need to check on the other devices on local network
@@ -433,10 +442,10 @@ public class LANScanModule extends ReactContextBaseJavaModule {
         sendEvent(getReactApplicationContext(), EVENT_STARTFETCH, null);
 
         WifiManager wifiManager = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        int wifiState = wifiManager.getWifiState();
-        if(wifiState != WifiManager.WIFI_STATE_ENABLED && wifiState != WifiManager.WIFI_STATE_UNKNOWN) {
-            return false;
-        }
+        // int wifiState = wifiManager.getWifiState();
+        // if(wifiState != WifiManager.WIFI_STATE_ENABLED && wifiState != WifiManager.WIFI_STATE_UNKNOWN) {
+        //     return false;
+        // }
 
         dhcpInfo = wifiManager.getDhcpInfo();
 
@@ -452,22 +461,29 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             String s_serverAddress = intToIp(dhcpInfo.serverAddress);
 
             String s_netmask = "";
-            try {
-                InetAddress addr = InetAddress.getByName(s_ipAddress);
-                Log.d("ReactNative", addr.toString());
-                NetworkInterface networkInterface = NetworkInterface.getByInetAddress(addr);
-                List<InterfaceAddress> interfaceAddressList = networkInterface.getInterfaceAddresses();
-
-                short netmaskRaw = interfaceAddressList.get(0).getNetworkPrefixLength();
-                s_netmask = convertNetMask(netmaskRaw);
-                Log.d("ReactNative", s_netmask);
-            } catch(Exception e) {
-                Log.d("ReactNative", e.toString());
-            }
-
-            if(s_netmask.equals("0.0.0.0")) {
-                s_netmask = "255.255.255.0";
-            }
+            // try {
+            //     InetAddress addr = InetAddress.getByName(s_ipAddress);
+            //
+            //     NetworkInterface networkInterface = NetworkInterface.getByInetAddress(addr);
+            //     List<InterfaceAddress> interfaceAddressList = networkInterface.getInterfaceAddresses();
+            //
+            //     short netmaskRaw = interfaceAddressList.get(0).getNetworkPrefixLength();
+            //     s_netmask = convertNetMask(netmaskRaw);
+            //
+            //     Log.d("ReactNative", "" + dhcpInfo.netmask);
+            //     Log.d("ReactNative", intToIp(dhcpInfo.netmask));
+            //     Log.d("ReactNative", s_ipAddress);
+            //     Log.d("ReactNative", addr.toString());
+            //     Log.d("ReactNative", "" + netmaskRaw);
+            //     Log.d("ReactNative", s_netmask);
+            // } catch(Exception e) {
+            //     Log.d("ReactNative", e.toString());
+            // }
+            //
+            s_netmask = "255.255.255.0";
+            // if(s_netmask.equals("0.0.0.0")) {
+            //     s_netmask = "255.255.255.0";
+            // }
 
             WritableMap device_info = new WritableNativeMap();
             device_info.putString(KEY_WIFISTATE_DNS1, s_dns1);
