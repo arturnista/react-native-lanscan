@@ -22,9 +22,13 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.Inet4Address;
+import java.net.NetworkInterface;
+import java.net.InterfaceAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.concurrent.Executor;
@@ -61,7 +65,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
     private static final String EVENT_END = "RNLANScanEnd";
     private static final String EVENT_ERROR = "RNLANScanError";
 
-    private DhcpInfo dhcp_info;
+    private DhcpInfo dhcpInfo;
     private IPv4 ipv4_wifi;
     private ArrayList<String> hosts_list;
     private HashMap<String, ArrayList<Integer>> available_hosts;
@@ -80,7 +84,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void fetchInfo(boolean force) {
-        if(this.dhcp_info == null)
+        if(this.dhcpInfo == null)
             this.getInfo();
         else if(force)
             this.getInfo();
@@ -188,7 +192,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                                 //Log.wtf("NETWORK", "PINGING " + hosts_list.size() + " Hosts....");
                                 String device_ip = "";
                                 try {
-                                    device_ip = intToIp(dhcp_info.ipAddress);
+                                    device_ip = intToIp(dhcpInfo.ipAddress);
                                 } catch (UnknownHostException e) {
                                     e.printStackTrace();
                                 }
@@ -289,7 +293,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                     // skip if it is the current device
                     String device_ip = "";
                     try {
-                        device_ip = intToIp(dhcp_info.ipAddress);
+                        device_ip = intToIp(dhcpInfo.ipAddress);
 
                         // try to set a timeout for the receive operation of the socket in this thread as
                         // without this if no host responds it will hang forever
@@ -416,23 +420,52 @@ public class LANScanModule extends ReactContextBaseJavaModule {
 
     }
 
+    private String convertNetMask(short prflen) {
+        int shft = 0xffffffff<<(32-prflen);
+        int oct1 = ((byte) ((shft&0xff000000)>>24)) & 0xff;
+        int oct2 = ((byte) ((shft&0x00ff0000)>>16)) & 0xff;
+        int oct3 = ((byte) ((shft&0x0000ff00)>>8)) & 0xff;
+        int oct4 = ((byte) (shft&0x000000ff)) & 0xff;
+        return oct1 + "." + oct2 + "." + oct3 + "." + oct4;
+    }
+
     private boolean getInfo() {
         sendEvent(getReactApplicationContext(), EVENT_STARTFETCH, null);
 
-        WifiManager wifi_manager= (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        dhcp_info=wifi_manager.getDhcpInfo();
+        WifiManager wifiManager = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        int wifiState = wifiManager.getWifiState();
+        if(wifiState != WifiManager.WIFI_STATE_ENABLED && wifiState != WifiManager.WIFI_STATE_UNKNOWN) {
+            return false;
+        }
+
+        dhcpInfo = wifiManager.getDhcpInfo();
+
+        Log.d( "ReactNative", dhcpInfo.toString() );
 
         try {
-            String s_dns1 = intToIp(dhcp_info.dns1);
-            String s_dns2 = intToIp(dhcp_info.dns2);
-            String s_gateway = intToIp(dhcp_info.gateway);
-            String s_ipAddress = intToIp(dhcp_info.ipAddress);
-            int s_leaseDuration = dhcp_info.leaseDuration;
-            String s_netmask = intToIp(dhcp_info.netmask);
-            String s_serverAddress = intToIp(dhcp_info.serverAddress);
+            String s_dns1 = intToIp(dhcpInfo.dns1);
+            String s_dns2 = intToIp(dhcpInfo.dns2);
+            String s_gateway = intToIp(dhcpInfo.gateway);
+            String s_ipAddress = intToIp(dhcpInfo.ipAddress);
+            int s_leaseDuration = dhcpInfo.leaseDuration;
+            // String s_netmask = intToIp(dhcpInfo.netmask);
+            String s_serverAddress = intToIp(dhcpInfo.serverAddress);
+
+            String s_netmask = "";
+            try {
+                InetAddress addr = InetAddress.getByName(s_ipAddress);
+                Log.d("ReactNative", addr.toString());
+                NetworkInterface networkInterface = NetworkInterface.getByInetAddress(addr);
+                List<InterfaceAddress> interfaceAddressList = networkInterface.getInterfaceAddresses();
+
+                short netmaskRaw = interfaceAddressList.get(0).getNetworkPrefixLength();
+                s_netmask = convertNetMask(netmaskRaw);
+                Log.d("ReactNative", s_netmask);
+            } catch(Exception e) {
+                Log.d("ReactNative", e.toString());
+            }
 
             if(s_netmask.equals("0.0.0.0")) {
-                Log.d("ReactNative", s_netmask);
                 s_netmask = "255.255.255.0";
             }
 
