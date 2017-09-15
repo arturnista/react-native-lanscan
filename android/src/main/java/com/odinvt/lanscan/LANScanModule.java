@@ -431,7 +431,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
     private boolean getInfo() {
         sendEvent(getReactApplicationContext(), EVENT_STARTFETCH, null);
 
-        WifiManager wifiManager = (WifiManager) getReactApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        WifiManager wifiManager = (WifiManager) getReactApplicationContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         // int wifiState = wifiManager.getWifiState();
         // if(wifiState != WifiManager.WIFI_STATE_ENABLED && wifiState != WifiManager.WIFI_STATE_UNKNOWN) {
         //     return false;
