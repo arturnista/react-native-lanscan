@@ -144,7 +144,6 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             // ((ThreadPoolExecutor) ManagedThreadPoolExecutor.THREAD_POOL_EXECUTOR_BROADCAST)
             broadcastThread = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutor());
             pingsThread = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutor());
-            Log.d("ReactNative", "broadcastThread is shutdown? " + broadcastThread.isShutdown());
 
             for(int i = min_port; i <= max_port; i++) {
                 sendDatagram(broadcastAddr, true, i,broadcast_timeout, broadcastThread);
@@ -196,17 +195,11 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                                 } catch (UnknownHostException e) {
                                     e.printStackTrace();
                                 }
-                                Log.d("ReactNative", hosts_list.toString());
                                 for (String host : hosts_list) {
                                     try {
-                                        if(host.equals("10.40.8.224")) {
-                                            Log.d("ReactNative", "InetAddress: " + InetAddress.getByName(host));
-                                            Log.d("ReactNative", "InetAddress is reachable? " + InetAddress.getByName(host).isReachable(ping_ms));
-                                        }
                                         if (host.equals(device_ip))
                                             continue;
                                         if (InetAddress.getByName(host).isReachable(ping_ms)) {
-                                            Log.d("ReactNative", "is available " + host);
                                             connected.add(host);
 
                                             //Log.wtf("HOST FOUND !!!", host + " RESPONDED");
@@ -216,13 +209,11 @@ public class LANScanModule extends ReactContextBaseJavaModule {
                                                 sendDatagram(host, false, i, port_ms, pingsThread);
                                             }
                                         } else {
-                                            // Log.d("ReactNative", "is available " + host);
                                             //Log.wtf("HOST NOT RESPONSIVE", host + " is not responding");
                                         }
                                     } catch (IOException ioe) {
                                 /* do nothing just continue to the next host */
                                         ioe.printStackTrace();
-                                        Log.d("ReactNative", "Erro?" + ioe);
                                     }
                                 }
                                 sendEvent(getReactApplicationContext(), EVENT_ENDPINGS, connected.size());
@@ -277,7 +268,6 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             serverSocket.setBroadcast(broadcast);
             serverSocket.setReuseAddress(true);
             InetAddress IPAddress = InetAddress.getByName(broadcastAddr);
-            Log.d("ReactNative", "Vamos: " + broadcastAddr);
             //Log.wtf("Info", "Sending Discovery message to " + IPAddress.getHostAddress() + " Via UDP port " + port);
 
             // we're sending "RNLS" message so if you need to check on the other devices on local network
@@ -470,14 +460,8 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             //     short netmaskRaw = interfaceAddressList.get(0).getNetworkPrefixLength();
             //     s_netmask = convertNetMask(netmaskRaw);
             //
-            //     Log.d("ReactNative", "" + dhcpInfo.netmask);
-            //     Log.d("ReactNative", intToIp(dhcpInfo.netmask));
-            //     Log.d("ReactNative", s_ipAddress);
-            //     Log.d("ReactNative", addr.toString());
-            //     Log.d("ReactNative", "" + netmaskRaw);
-            //     Log.d("ReactNative", s_netmask);
             // } catch(Exception e) {
-            //     Log.d("ReactNative", e.toString());
+
             // }
             //
             s_netmask = "255.255.255.0";
