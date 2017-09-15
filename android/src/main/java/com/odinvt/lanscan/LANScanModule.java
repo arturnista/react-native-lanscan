@@ -146,7 +146,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             pingsThread = ((ThreadPoolExecutor) ManagedThreadPoolExecutor.getExecutor());
 
             for(int i = min_port; i <= max_port; i++) {
-                sendDatagram(broadcastAddr, true, i,broadcast_timeout, broadcastThread);
+                sendDatagram(broadcastAddr, true, i, broadcast_timeout, broadcastThread);
             }
 
             broadcastThread.shutdown();
@@ -432,14 +432,7 @@ public class LANScanModule extends ReactContextBaseJavaModule {
         sendEvent(getReactApplicationContext(), EVENT_STARTFETCH, null);
 
         WifiManager wifiManager = (WifiManager) getReactApplicationContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        // int wifiState = wifiManager.getWifiState();
-        // if(wifiState != WifiManager.WIFI_STATE_ENABLED && wifiState != WifiManager.WIFI_STATE_UNKNOWN) {
-        //     return false;
-        // }
-
         dhcpInfo = wifiManager.getDhcpInfo();
-
-        Log.d( "ReactNative", dhcpInfo.toString() );
 
         try {
             String s_dns1 = intToIp(dhcpInfo.dns1);
@@ -447,27 +440,28 @@ public class LANScanModule extends ReactContextBaseJavaModule {
             String s_gateway = intToIp(dhcpInfo.gateway);
             String s_ipAddress = intToIp(dhcpInfo.ipAddress);
             int s_leaseDuration = dhcpInfo.leaseDuration;
-            // String s_netmask = intToIp(dhcpInfo.netmask);
             String s_serverAddress = intToIp(dhcpInfo.serverAddress);
+            // String s_netmask = intToIp(dhcpInfo.netmask);
 
             String s_netmask = "";
-            // try {
-            //     InetAddress addr = InetAddress.getByName(s_ipAddress);
-            //
-            //     NetworkInterface networkInterface = NetworkInterface.getByInetAddress(addr);
-            //     List<InterfaceAddress> interfaceAddressList = networkInterface.getInterfaceAddresses();
-            //
-            //     short netmaskRaw = interfaceAddressList.get(0).getNetworkPrefixLength();
-            //     s_netmask = convertNetMask(netmaskRaw);
-            //
-            // } catch(Exception e) {
+            try {
+                InetAddress addr = InetAddress.getByName(s_ipAddress);
 
-            // }
-            //
-            s_netmask = "255.255.255.0";
-            // if(s_netmask.equals("0.0.0.0")) {
-            //     s_netmask = "255.255.255.0";
-            // }
+                NetworkInterface networkInterface = NetworkInterface.getByInetAddress(addr);
+                List<InterfaceAddress> interfaceAddressList = networkInterface.getInterfaceAddresses();
+
+                short netmaskRaw;
+                // Check if its an IPV4 address
+                if(interfaceAddressList.get(0).getAddress() instanceof Inet4Address) {
+                    netmaskRaw = interfaceAddressList.get(0).getNetworkPrefixLength();
+                } else {
+                    netmaskRaw = interfaceAddressList.get(1).getNetworkPrefixLength();
+                }
+
+                s_netmask = convertNetMask(netmaskRaw);
+            } catch(Exception e) {
+                Log.d("ReactNative", e.toString());
+            }
 
             WritableMap device_info = new WritableNativeMap();
             device_info.putString(KEY_WIFISTATE_DNS1, s_dns1);
